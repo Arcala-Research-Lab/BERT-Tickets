@@ -128,8 +128,9 @@ elif args.model == 'squad':
         else:
             weight_dict[key] = model_dict[key]
 
-    torch.save(mask_dict, output+'mask.pt')
-    torch.save(weight_dict, output+'weight.pt')
+    # torch.save(mask_dict, output+'mask.pt')
+    # torch.save(weight_dict, output+'weight.pt')
+    torch.save(model.state_dict(), output+'pruned_model.pth')
 
 elif args.model == 'pretrain':
 
@@ -159,6 +160,7 @@ elif args.model == 'pretrain':
         else:
             weight_dict[key] = model_dict[key]
 
-    torch.save(mask_dict, output+'mask.pt')
-    torch.save(weight_dict, output+'weight.pt')
+    # torch.save(mask_dict, output+'mask.pt')
+    # torch.save(weight_dict, output+'weight.pt')
+    torch.save(model.state_dict(), output)
 
