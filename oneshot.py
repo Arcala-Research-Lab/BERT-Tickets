@@ -1,9 +1,10 @@
 import argparse
 from transformers import BertForMaskedLM, BertForSequenceClassification, BertForQuestionAnswering
-from transformers import BertConfig
+from transformers import BertConfig, BertModel
 import torch.nn.utils.prune as prune
 import numpy as np  
 import torch  
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 parser = argparse.ArgumentParser(description='PyTorch Cifar10 Training')
 parser.add_argument('--weight', default='pre', type=str, help='file_dir')
@@ -77,28 +78,49 @@ if args.model == 'glue':
         output = 'random_prun/'
 
     elif args.weight == 'pre':
-        model = BertForSequenceClassification.from_pretrained(
-            'bert-base-uncased',
-            from_tf=bool(".ckpt" in 'bert-base-uncased'),
-            config=config
-        )
-        output = 'pretrain_prun/'
-
+        model = AutoModelForSequenceClassification.from_pretrained("gchhablani/bert-base-cased-finetuned-mrpc")
+        # model = BertForSequenceClassification.from_pretrained(
+        #     'bert-base-uncased',
+        #     from_tf=bool(".ckpt" in 'bert-base-uncased'),
+        #     config=config
+        # )
+        output = 'pruned_model/'
+    # print(len(model.state_dict().keys()))
     pruning_model(model, args.rate)
+    # print(model.state_dict().keys())
     zero = see_weight_rate(model)
     print('zero rate', zero)
 
     mask_dict = {}
     weight_dict = {}
+    keys_to_remove = []
+    keys_to_rename = []
     model_dict = model.state_dict()
     for key in model_dict.keys():
         if 'mask' in key:
-            mask_dict[key] = model_dict[key]
-        else:
-            weight_dict[key] = model_dict[key]
+            # print("Mask: ", model_dict[key].shape)
+            mask = model_dict[key]
+            new_key = key.replace("_mask", "")
+            orig_key = new_key + '_orig'
+    
+            # print("Weight: ",model_dict[key].shape)
+            model_dict[orig_key] *= mask
+            # print(model_dict[orig_key])
+            keys_to_remove.append(key)
+            keys_to_rename.append(orig_key)
+    
+    for key in keys_to_remove:
+          del model_dict[key]
+    for key in keys_to_rename:
+        new_key = key.replace("_orig", "")
+        model_dict[new_key] = model_dict.pop(key)
 
-    torch.save(mask_dict, output+'mask.pt')
-    torch.save(weight_dict, output+'weight.pt')
+
+
+    # torch.save(mask_dict, output+'mask.pt')
+    # torch.save(weight_dict, output+'weight.pt')
+    torch.save(model_dict, output+'pruned_model.pth')
+    # model.save_pretrained(output)
 
 elif args.model == 'squad':
 
