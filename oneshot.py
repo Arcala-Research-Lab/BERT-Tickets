@@ -119,7 +119,7 @@ if args.model == 'glue':
 
     # torch.save(mask_dict, output+'mask.pt')
     # torch.save(weight_dict, output+'weight.pt')
-    torch.save(model_dict, output+'pruned_model.pth')
+    torch.save(model_dict, output+str(args.rate)+'pruned_model.pth')
     # model.save_pretrained(output)
 
 elif args.model == 'squad':
