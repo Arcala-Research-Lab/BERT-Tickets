@@ -77,22 +77,22 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (
-            BertConfig,
-            XLNetConfig,
-            XLMConfig,
-            RobertaConfig,
-            DistilBertConfig,
-            AlbertConfig,
-            XLMRobertaConfig,
-            FlaubertConfig,
-        )
-    ),
-    (),
-)
+# ALL_MODELS = sum(
+#     (
+#         tuple(conf.pretrained_config_archive_map.keys())
+#         for conf in (
+#             BertConfig,
+#             XLNetConfig,
+#             XLMConfig,
+#             RobertaConfig,
+#             DistilBertConfig,
+#             AlbertConfig,
+#             XLMRobertaConfig,
+#             FlaubertConfig,
+#         )
+#     ),
+#     (),
+# )
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForSequenceClassification, BertTokenizer),
@@ -158,6 +158,26 @@ def see_weight_rate(model):
  
 
     return 100*zero_sum/sum_list
+
+def pruning_model(model,px):
+
+    parameters_to_prune =[]
+    for ii in range(12):
+        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.query, 'weight'))
+        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.key, 'weight'))
+        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.value, 'weight'))
+        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.output.dense, 'weight'))
+        parameters_to_prune.append((model.bert.encoder.layer[ii].intermediate.dense, 'weight'))
+        parameters_to_prune.append((model.bert.encoder.layer[ii].output.dense, 'weight'))
+
+    parameters_to_prune.append((model.bert.pooler.dense, 'weight'))
+    parameters_to_prune = tuple(parameters_to_prune)
+
+    prune.global_unstructured(
+        parameters_to_prune,
+        pruning_method=prune.L1Unstructured,
+        amount=px,
+    )
 
 def pruning_model_custom(model, mask_dict):
 
@@ -498,9 +518,9 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
             label_list=label_list,
             max_length=args.max_seq_length,
             output_mode=output_mode,
-            pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
-            pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
+            # pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
+            # pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+            # pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
         )
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s", cached_features_file)
@@ -560,14 +580,14 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        # help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
     )
     parser.add_argument(
         "--pretrained",
         default=None,
         type=str,
         required=False,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        # help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
     )
     parser.add_argument(
         "--task_name",
@@ -699,6 +719,9 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
+    parser.add_argument("--pruning_steps", type=int)
+    parser.add_argument("--checkpoint_dir", type=str, default="")
+
     args = parser.parse_args()
 
     if (
@@ -783,12 +806,14 @@ def main():
 
     if args.dir == 'pre':
 
-        model = model_class.from_pretrained(
-            args.model_name_or_path,
-            from_tf=bool(".ckpt" in args.model_name_or_path),
-            config=config,
-            cache_dir=args.cache_dir if args.cache_dir else None,
-        )
+        # model = model_class.from_pretrained(
+        #     args.model_name_or_path,
+        #     from_tf=bool(".ckpt" in args.model_name_or_path),
+        #     config=config,
+        #     cache_dir=args.cache_dir if args.cache_dir else None,
+        # )
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        model = AutoModelForSequenceClassification.from_pretrained("ajrae/bert-base-uncased-finetuned-mrpc")
 
     elif args.dir == 'rand':
 
@@ -819,8 +844,41 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer)
-        logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+        evaluate(args, model, tokenizer)
+        pruning_model(model, 0.1)
+        pruning_steps = args.pruning_steps
+        for p_step in range(pruning_steps):
+            global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+            logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+            keys_to_remove = []
+            keys_to_rename = []
+            model_dict = model.state_dict()
+            for key in model_dict.keys():
+                if 'mask' in key:
+                    # print("Mask: ", model_dict[key].shape)
+                    mask = model_dict[key]
+                    new_key = key.replace("_mask", "")
+                    orig_key = new_key + '_orig'
+            
+                    # print("Weight: ",model_dict[key].shape)
+                    model_dict[orig_key] *= mask
+                    # print(model_dict[orig_key])
+                    keys_to_remove.append(key)
+                    keys_to_rename.append(orig_key)
+            
+            for key in keys_to_remove:
+                del model_dict[key]
+            for key in keys_to_rename:
+                new_key = key.replace("_orig", "")
+                model_dict[new_key] = model_dict.pop(key)
+            
+            zero = see_weight_rate(model)
+            torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(zero) +'.pth')
+
+            pruning_model(model, 0.1)
+            zero = see_weight_rate(model)
+            print('zero rate', zero)
+
 
     # # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
     # if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):

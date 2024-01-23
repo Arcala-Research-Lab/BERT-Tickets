@@ -93,34 +93,44 @@ if args.model == 'glue':
 
     mask_dict = {}
     weight_dict = {}
-    keys_to_remove = []
-    keys_to_rename = []
     model_dict = model.state_dict()
     for key in model_dict.keys():
         if 'mask' in key:
-            # print("Mask: ", model_dict[key].shape)
-            mask = model_dict[key]
-            new_key = key.replace("_mask", "")
-            orig_key = new_key + '_orig'
+            mask_dict[key] = model_dict[key]
+        else:
+            weight_dict[key] = model_dict[key]
+
+    torch.save(mask_dict, output+'mask.pt')
+    torch.save(weight_dict, output+'weight.pt')
+
+    # mask_dict = {}
+    # weight_dict = {}
+    # keys_to_remove = []
+    # keys_to_rename = []
+    # model_dict = model.state_dict()
+    # for key in model_dict.keys():
+    #     if 'mask' in key:
+    #         # print("Mask: ", model_dict[key].shape)
+    #         mask = model_dict[key]
+    #         new_key = key.replace("_mask", "")
+    #         orig_key = new_key + '_orig'
     
-            # print("Weight: ",model_dict[key].shape)
-            model_dict[orig_key] *= mask
-            # print(model_dict[orig_key])
-            keys_to_remove.append(key)
-            keys_to_rename.append(orig_key)
+    #         # print("Weight: ",model_dict[key].shape)
+    #         model_dict[orig_key] *= mask
+    #         # print(model_dict[orig_key])
+    #         keys_to_remove.append(key)
+    #         keys_to_rename.append(orig_key)
     
-    for key in keys_to_remove:
-          del model_dict[key]
-    for key in keys_to_rename:
-        new_key = key.replace("_orig", "")
-        model_dict[new_key] = model_dict.pop(key)
+    # for key in keys_to_remove:
+    #       del model_dict[key]
+    # for key in keys_to_rename:
+    #     new_key = key.replace("_orig", "")
+    #     model_dict[new_key] = model_dict.pop(key)
 
 
 
-    # torch.save(mask_dict, output+'mask.pt')
-    # torch.save(weight_dict, output+'weight.pt')
-    torch.save(model_dict, output+str(args.rate)+'pruned_model.pth')
-    # model.save_pretrained(output)
+    # torch.save(model_dict, output+str(args.rate)+'pruned_model.pth')
+
 
 elif args.model == 'squad':
 
