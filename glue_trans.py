@@ -723,6 +723,7 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     parser.add_argument("--pruning_steps", type=int)
     parser.add_argument("--checkpoint_dir", type=str, default="")
+    # parser.add_argument("--no_pruning", type=bool, default=False)
 
     args = parser.parse_args()
 
@@ -806,16 +807,23 @@ def main():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    if args.dir == 'pre':
+    # if args.dir == 'pre':
 
-        # model = model_class.from_pretrained(
-        #     args.model_name_or_path,
-        #     from_tf=bool(".ckpt" in args.model_name_or_path),
-        #     config=config,
-        #     cache_dir=args.cache_dir if args.cache_dir else None,
-        # )
+    #     model = model_class.from_pretrained(
+    #         args.model_name_or_path,
+    #         from_tf=bool(".ckpt" in args.model_name_or_path),
+    #         config=config,
+    #         cache_dir=args.cache_dir if args.cache_dir else None
+    #     )
+    if args.dir == 'pre_mrpc':
+
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         model = AutoModelForSequenceClassification.from_pretrained("ajrae/bert-base-uncased-finetuned-mrpc")
+
+    elif args.dir == 'pre_mrpc2':
+
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        model = AutoModelForSequenceClassification.from_pretrained("Intel/bert-base-uncased-mrpc")
 
     elif args.dir == 'rand':
 
@@ -870,7 +878,7 @@ def main():
                     # print(model_dict[orig_key])
                     keys_to_remove.append(key)
                     keys_to_rename.append(orig_key)
-            
+        
             for key in keys_to_remove:
                 del model_dict[key]
             for key in keys_to_rename:
