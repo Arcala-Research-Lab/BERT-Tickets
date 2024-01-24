@@ -481,6 +481,8 @@ def evaluate(args, model, tokenizer, prefix=""):
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
                 writer.write("%s = %s\n" % (key, str(result[key])))
+                # print("  %s = %s", key, str(result[key]))
+                print("%s = %s\n" % (key, str(result[key]))) 
 
     return results
 
@@ -844,8 +846,10 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
-        logger.info("Before pruning and fine-tuning: ")
+        print("Before pruning and fine-tuning: ")
         evaluate(args, model, tokenizer)
+        model_dict = model.state_dict()
+        torch.save(model_dict, args.checkpoint_dir+ 'pruned_model0' +'.pth')
         pruning_model(model, 0.1)
         pruning_steps = args.pruning_steps
         for p_step in range(pruning_steps):
@@ -873,11 +877,11 @@ def main():
                 new_key = key.replace("_orig", "")
                 model_dict[new_key] = model_dict.pop(key)
 
-            logger.info("After pruning and fine-tuning: ")
+            print("After pruning and fine-tuning step:", p_step)
             evaluate(args, model, tokenizer)
 
             zero = see_weight_rate(model)
-            torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(zero) +'.pth')
+            torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(p_step+1) +'.pth')
 
             pruning_model(model, 0.1)
             zero = see_weight_rate(model)
