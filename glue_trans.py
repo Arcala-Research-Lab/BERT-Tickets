@@ -844,6 +844,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
+        logger.info("Before pruning and fine-tuning: ")
         evaluate(args, model, tokenizer)
         pruning_model(model, 0.1)
         pruning_steps = args.pruning_steps
@@ -871,7 +872,10 @@ def main():
             for key in keys_to_rename:
                 new_key = key.replace("_orig", "")
                 model_dict[new_key] = model_dict.pop(key)
-            
+
+            logger.info("After pruning and fine-tuning: ")
+            evaluate(args, model, tokenizer)
+
             zero = see_weight_rate(model)
             torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(zero) +'.pth')
 
