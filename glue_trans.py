@@ -723,7 +723,9 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     parser.add_argument("--pruning_steps", type=int)
     parser.add_argument("--checkpoint_dir", type=str, default="")
-    # parser.add_argument("--no_pruning", type=bool, default=False)
+    parser.add_argument("--no_pruning", type=bool, default=False)
+    parser.add_argument("--save_prune_before_finetune", type=bool, default=True)
+
 
     args = parser.parse_args()
 
@@ -807,15 +809,15 @@ def main():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    # if args.dir == 'pre':
+    if args.dir == 'pre':
 
-    #     model = model_class.from_pretrained(
-    #         args.model_name_or_path,
-    #         from_tf=bool(".ckpt" in args.model_name_or_path),
-    #         config=config,
-    #         cache_dir=args.cache_dir if args.cache_dir else None
-    #     )
-    if args.dir == 'pre_mrpc':
+        model = model_class.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None
+        )
+    elif args.dir == 'pre_mrpc':
 
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         model = AutoModelForSequenceClassification.from_pretrained("ajrae/bert-base-uncased-finetuned-mrpc")
@@ -824,6 +826,12 @@ def main():
 
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         model = AutoModelForSequenceClassification.from_pretrained("Intel/bert-base-uncased-mrpc")
+
+    elif args.dir == 'pre_mnli':
+
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        model = AutoModelForSequenceClassification.from_pretrained("yoshitomo-matsubara/bert-base-uncased-mnli")
+
 
     elif args.dir == 'rand':
 
@@ -858,42 +866,53 @@ def main():
         evaluate(args, model, tokenizer)
         model_dict = model.state_dict()
         torch.save(model_dict, args.checkpoint_dir+ 'pruned_model0' +'.pth')
-        pruning_model(model, 0.1)
-        pruning_steps = args.pruning_steps
-        for p_step in range(pruning_steps):
-            global_step, tr_loss = train(args, train_dataset, model, tokenizer)
-            logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
-            keys_to_remove = []
-            keys_to_rename = []
-            model_dict = model.state_dict()
-            for key in model_dict.keys():
-                if 'mask' in key:
-                    # print("Mask: ", model_dict[key].shape)
-                    mask = model_dict[key]
-                    new_key = key.replace("_mask", "")
-                    orig_key = new_key + '_orig'
-            
-                    # print("Weight: ",model_dict[key].shape)
-                    model_dict[orig_key] *= mask
-                    # print(model_dict[orig_key])
-                    keys_to_remove.append(key)
-                    keys_to_rename.append(orig_key)
-        
-            for key in keys_to_remove:
-                del model_dict[key]
-            for key in keys_to_rename:
-                new_key = key.replace("_orig", "")
-                model_dict[new_key] = model_dict.pop(key)
 
-            print("After pruning and fine-tuning step:", p_step)
-            evaluate(args, model, tokenizer)
-
-            zero = see_weight_rate(model)
-            torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(p_step+1) +'.pth')
-
+        if not args.no_pruning:
             pruning_model(model, 0.1)
             zero = see_weight_rate(model)
             print('zero rate', zero)
+        pruning_steps = args.pruning_steps
+        for p_step in range(pruning_steps):
+            if args.save_prune_before_finetune:
+                print("After pruning step:", p_step)
+                evaluate(args, model, tokenizer)
+                torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(p_step+1) +'.pth')
+            if args.num_train_epochs > 0:
+                global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+                logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+            if not args.no_pruning:
+                keys_to_remove = []
+                keys_to_rename = []
+                model_dict = model.state_dict()
+                for key in model_dict.keys():
+                    if 'mask' in key:
+                        # print("Mask: ", model_dict[key].shape)
+                        mask = model_dict[key]
+                        new_key = key.replace("_mask", "")
+                        orig_key = new_key + '_orig'
+                
+                        # print("Weight: ",model_dict[key].shape)
+                        model_dict[orig_key] *= mask
+                        # print(model_dict[orig_key])
+                        keys_to_remove.append(key)
+                        keys_to_rename.append(orig_key)
+            
+                for key in keys_to_remove:
+                    del model_dict[key]
+                for key in keys_to_rename:
+                    new_key = key.replace("_orig", "")
+                    model_dict[new_key] = model_dict.pop(key)
+
+                print("After pruning and fine-tuning step:", p_step)
+                evaluate(args, model, tokenizer)
+
+                zero = see_weight_rate(model)
+            torch.save(model_dict, args.checkpoint_dir+ 'pruned_finetuned_model' + str(p_step+1) +'.pth')
+
+            if not args.no_pruning:
+                pruning_model(model, 0.1)
+                zero = see_weight_rate(model)
+                print('zero rate', zero)
 
 
     # # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
