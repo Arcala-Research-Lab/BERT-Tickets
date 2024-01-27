@@ -725,7 +725,7 @@ def main():
     parser.add_argument("--checkpoint_dir", type=str, default="")
     parser.add_argument("--no_pruning", type=bool, default=False)
     parser.add_argument("--save_prune_before_finetune", type=bool, default=True)
-
+    parser.add_argument("--skip_first_pruning", type=bool, default=False)
 
     args = parser.parse_args()
 
@@ -867,7 +867,7 @@ def main():
         model_dict = model.state_dict()
         torch.save(model_dict, args.checkpoint_dir+ 'pruned_model0' +'.pth')
 
-        if not args.no_pruning:
+        if not args.no_pruning and not args.skip_first_pruning:
             pruning_model(model, 0.1)
             zero = see_weight_rate(model)
             print('zero rate', zero)
@@ -880,7 +880,7 @@ def main():
             if args.num_train_epochs > 0:
                 global_step, tr_loss = train(args, train_dataset, model, tokenizer)
                 logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
-            if not args.no_pruning:
+            if not args.no_pruning and (not args.skip_first_pruning or p_step != 0):
                 keys_to_remove = []
                 keys_to_rename = []
                 model_dict = model.state_dict()
