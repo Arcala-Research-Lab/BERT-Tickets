@@ -267,8 +267,8 @@ def train(args, train_dataset, model, tokenizer):
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
     # multi-gpu training (should be after apex fp16 initialization)
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    # if args.n_gpu > 1:
+    #     model = torch.nn.DataParallel(model)
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
@@ -766,6 +766,8 @@ def main():
     parser.add_argument("--pruning_steps", type=int)
     parser.add_argument("--checkpoint_dir", type=str, default="")
 
+    parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+
     args = parser.parse_args()
 
     if (
@@ -798,6 +800,11 @@ def main():
         device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
         args.n_gpu = 1
+    # if not args.no_cuda:
+    #     args.n_gpu = torch.cuda.device_count()
+    #     torch.cuda.set_device(int(args.gpu))
+    #     device = torch.device("cuda", args.gpu)
+
     args.device = device
 
     # Setup logging
