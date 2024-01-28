@@ -33,3 +33,9 @@
 
 ############
 # python -u LT_glue.py --output_dir save_directories/mrpc_lth --logging_steps 36813 --task_name MRPC --data_dir glue_data/MRPC --model_type bert --model_name_or_path bert-base-uncased  --do_train --do_eval   --do_lower_case  --max_seq_length 128   --per_gpu_train_batch_size 32  --learning_rate 2e-5  --num_train_epochs 30  --overwrite_output_dir  --evaluate_during_training   --save_steps 36813  --eval_all_checkpoints   --seed 57  > logs/bert_mrpc_lth.log &
+
+##########
+
+python -u LT_glue_new.py --dir pre --output_dir tmp/mrpc/LT --logging_steps 12271 --task_name MRPC --data_dir glue_data/MRPC --model_type bert --model_name_or_path bert-base-uncased --do_train --do_eval --do_lower_case --max_seq_length 128 --per_gpu_train_batch_size 32 --learning_rate 2e-5 --num_train_epochs 30 --overwrite_output_dir --evaluate_during_training --save_steps 0 --eval_all_checkpoints --seed 5 --checkpoint_dir checkpoints/LT_MRPC/ --pruning_steps 10 --rewind_epoch 6 --populate_finetune > logs/mrpc_lth.log &
+
+# python -u LT_glue_new.py --dir pre --output_dir tmp/mrpc/LT --logging_steps 12271 --task_name MRPC --data_dir glue_data/MRPC --model_type bert --model_name_or_path bert-base-uncased --do_train --do_eval --do_lower_case --max_seq_length 128 --per_gpu_train_batch_size 32 --learning_rate 2e-5 --num_train_epochs 30 --overwrite_output_dir --evaluate_during_training --save_steps 0 --eval_all_checkpoints --seed 5 --checkpoint_dir checkpoints/LT_MRPC/ --pruning_steps 10 --rewind_epoch 6
