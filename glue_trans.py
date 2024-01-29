@@ -129,32 +129,52 @@ def rewind(pre_weight):
 
     return recover_dict
 
-def see_weight_rate(model):
+def see_weight_rate(args, model):
 
     sum_list = 0
     zero_sum = 0
-    for ii in range(12):
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.query.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.query.weight == 0))
+    if args.model_type == 'bert':
+        for ii in range(12):
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.query.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.query.weight == 0))
 
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.key.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.key.weight == 0))
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.key.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.key.weight == 0))
 
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.value.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.value.weight == 0))
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.self.value.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.self.value.weight == 0))
 
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.output.dense.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.output.dense.weight == 0))
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].attention.output.dense.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].attention.output.dense.weight == 0))
 
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].intermediate.dense.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].intermediate.dense.weight == 0))
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].intermediate.dense.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].intermediate.dense.weight == 0))
 
-        sum_list = sum_list+float(model.bert.encoder.layer[ii].output.dense.weight.nelement())
-        zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].output.dense.weight == 0))
+            sum_list = sum_list+float(model.bert.encoder.layer[ii].output.dense.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.bert.encoder.layer[ii].output.dense.weight == 0))
 
 
-    sum_list = sum_list+float(model.bert.pooler.dense.weight.nelement())
-    zero_sum = zero_sum+float(torch.sum(model.bert.pooler.dense.weight == 0))
+        sum_list = sum_list+float(model.bert.pooler.dense.weight.nelement())
+        zero_sum = zero_sum+float(torch.sum(model.bert.pooler.dense.weight == 0))
+    else:
+        for ii in range(6):
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].attention.q_lin.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].attention.q_lin.weight == 0))
+
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].attention.k_lin.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].attention.k_lin.weight == 0))
+
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].attention.v_lin.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].attention.v_lin.weight == 0))
+
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].attention.out_lin.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].attention.out_lin.weight == 0))
+
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].ffn.lin1.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].ffn.lin1.weight == 0))
+
+            sum_list = sum_list+float(model.distilbert.transformer.layer[ii].ffn.lin2.weight.nelement())
+            zero_sum = zero_sum+float(torch.sum(model.distilbert.transformer.layer[ii].ffn.lin2.weight == 0))
  
 
     return 100*zero_sum/sum_list
@@ -229,8 +249,8 @@ def train(args, train_dataset, model, tokenizer):
     """ Train the model """
     record_result = []
 
-    # zero_rate = see_weight_rate(model)
-    # record_result.append(zero_rate)
+    zero_rate = see_weight_rate(args,model)
+    record_result.append(zero_rate)
 
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
@@ -860,8 +880,8 @@ def main():
     if args.mask_dir:        
         mask = torch.load(args.mask_dir, map_location=args.device)
         pruning_model_custom(model, mask)
-        # zero_rate = see_weight_rate(model)
-        # print('model 0:',zero_rate)
+        zero_rate = see_weight_rate(args,model)
+        print('model 0:',zero_rate)
 
 
     if args.local_rank == 0:
@@ -881,8 +901,8 @@ def main():
 
         if not args.no_pruning and not args.skip_first_pruning:
             pruning_model(args,model, 0.1)
-            # zero = see_weight_rate(model)
-            # print('zero rate', zero)
+            zero = see_weight_rate(args,model)
+            print('zero rate', zero)
         pruning_steps = args.pruning_steps
         for p_step in range(pruning_steps):
             if args.save_prune_before_finetune:
@@ -918,13 +938,13 @@ def main():
                 print("After pruning and fine-tuning step:", p_step)
                 evaluate(args, model, tokenizer)
 
-                # zero = see_weight_rate(model)
+                zero = see_weight_rate(args,model)
             torch.save(model_dict, args.checkpoint_dir+ 'pruned_finetuned_model' + str(p_step+1) +'.pth')
 
             if not args.no_pruning:
                 pruning_model(args,model, 0.1)
-                # zero = see_weight_rate(model)
-                # print('zero rate', zero)
+                zero = see_weight_rate(args,model)
+                print('zero rate', zero)
 
 
     # # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
