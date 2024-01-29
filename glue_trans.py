@@ -159,19 +159,28 @@ def see_weight_rate(model):
 
     return 100*zero_sum/sum_list
 
-def pruning_model(model,px):
-
+def pruning_model(args, model,px):
     parameters_to_prune =[]
-    for ii in range(12):
-        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.query, 'weight'))
-        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.key, 'weight'))
-        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.value, 'weight'))
-        parameters_to_prune.append((model.bert.encoder.layer[ii].attention.output.dense, 'weight'))
-        parameters_to_prune.append((model.bert.encoder.layer[ii].intermediate.dense, 'weight'))
-        parameters_to_prune.append((model.bert.encoder.layer[ii].output.dense, 'weight'))
 
-    parameters_to_prune.append((model.bert.pooler.dense, 'weight'))
-    parameters_to_prune = tuple(parameters_to_prune)
+    if args.model_type == 'bert':
+        for ii in range(12):
+            parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.query, 'weight'))
+            parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.key, 'weight'))
+            parameters_to_prune.append((model.bert.encoder.layer[ii].attention.self.value, 'weight'))
+            parameters_to_prune.append((model.bert.encoder.layer[ii].attention.output.dense, 'weight'))
+            parameters_to_prune.append((model.bert.encoder.layer[ii].intermediate.dense, 'weight'))
+            parameters_to_prune.append((model.bert.encoder.layer[ii].output.dense, 'weight'))
+
+        parameters_to_prune.append((model.bert.pooler.dense, 'weight'))
+        parameters_to_prune = tuple(parameters_to_prune)
+    else:
+        for ii in range(6):
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].attention.q_lin, 'weight'))
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].attention.k_lin, 'weight'))
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].attention.v_lin, 'weight'))
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].attention.out_lin, 'weight'))
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].ffn.lin1, 'weight'))
+            parameters_to_prune.append((model.distilbert.transformer.layer[ii].ffn.lin2, 'weight'))
 
     prune.global_unstructured(
         parameters_to_prune,
@@ -220,8 +229,8 @@ def train(args, train_dataset, model, tokenizer):
     """ Train the model """
     record_result = []
 
-    zero_rate = see_weight_rate(model)
-    record_result.append(zero_rate)
+    # zero_rate = see_weight_rate(model)
+    # record_result.append(zero_rate)
 
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
@@ -481,6 +490,8 @@ def evaluate(args, model, tokenizer, prefix=""):
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
                 writer.write("%s = %s\n" % (key, str(result[key])))
+                # print("  %s = %s", key, str(result[key]))
+                print("%s = %s\n" % (key, str(result[key]))) 
 
     return results
 
@@ -500,39 +511,41 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
             str(task),
         ),
     )
-    if os.path.exists(cached_features_file) and not args.overwrite_cache:
-        logger.info("Loading features from cached file %s", cached_features_file)
-        features = torch.load(cached_features_file)
-    else:
-        logger.info("Creating features from dataset file at %s", args.data_dir)
-        label_list = processor.get_labels()
-        if task in ["mnli", "mnli-mm"] and args.model_type in ["roberta", "xlmroberta"]:
-            # HACK(label indices are swapped in RoBERTa pretrained model)
-            label_list[1], label_list[2] = label_list[2], label_list[1]
-        examples = (
-            processor.get_dev_examples(args.data_dir) if evaluate else processor.get_train_examples(args.data_dir)
-        )
-        features = convert_examples_to_features(
-            examples,
-            tokenizer,
-            label_list=label_list,
-            max_length=args.max_seq_length,
-            output_mode=output_mode,
-            # pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
-            # pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            # pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
-        )
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s", cached_features_file)
-            torch.save(features, cached_features_file)
+    # if os.path.exists(cached_features_file) and not args.overwrite_cache:
+    #     logger.info("Loading features from cached file %s", cached_features_file)
+    #     features = torch.load(cached_features_file)
+    # else:
+    logger.info("Creating features from dataset file at %s", args.data_dir)
+    label_list = processor.get_labels()
+    if task in ["mnli", "mnli-mm"] and args.model_type in ["roberta", "xlmroberta"]:
+        # HACK(label indices are swapped in RoBERTa pretrained model)
+        label_list[1], label_list[2] = label_list[2], label_list[1]
+    examples = (
+        processor.get_dev_examples(args.data_dir) if evaluate else processor.get_train_examples(args.data_dir)
+    )
+    features = convert_examples_to_features(
+        examples,
+        tokenizer,
+        label_list=label_list,
+        max_length=args.max_seq_length,
+        output_mode=output_mode,
+        # pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
+        # pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+        # pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
+    )
+    if args.local_rank in [-1, 0]:
+        logger.info("Saving features into cached file %s", cached_features_file)
+        torch.save(features, cached_features_file)
 
     if args.local_rank == 0 and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
-    all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    if args.model_type == 'bert':
+        all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    else:
+        all_token_type_ids = torch.tensor([0 for f in features], dtype=torch.long)
     if output_mode == "classification":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
     elif output_mode == "regression":
@@ -721,6 +734,9 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     parser.add_argument("--pruning_steps", type=int)
     parser.add_argument("--checkpoint_dir", type=str, default="")
+    parser.add_argument("--no_pruning", type=bool, default=False)
+    parser.add_argument("--save_prune_before_finetune", type=bool, default=True)
+    parser.add_argument("--skip_first_pruning", type=bool, default=False)
 
     args = parser.parse_args()
 
@@ -800,21 +816,35 @@ def main():
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
     if args.dir == 'pre':
 
-        # model = model_class.from_pretrained(
-        #     args.model_name_or_path,
-        #     from_tf=bool(".ckpt" in args.model_name_or_path),
-        #     config=config,
-        #     cache_dir=args.cache_dir if args.cache_dir else None,
-        # )
+        model = model_class.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None
+        )
+    elif args.dir == 'pre_mrpc':
+
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         model = AutoModelForSequenceClassification.from_pretrained("ajrae/bert-base-uncased-finetuned-mrpc")
 
+    elif args.dir == 'pre_mrpc2':
+
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        model = AutoModelForSequenceClassification.from_pretrained("Intel/bert-base-uncased-mrpc")
+
+    elif args.dir == 'pre_mnli':
+
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        model = AutoModelForSequenceClassification.from_pretrained("yoshitomo-matsubara/bert-base-uncased-mnli")
+
+    elif args.dir == 'pre_disitlbert':
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        model = AutoModelForSequenceClassification.from_pretrained("vicl/distilbert-base-uncased-finetuned-mrpc")
     elif args.dir == 'rand':
 
         model = model_class(config=config)
@@ -830,8 +860,8 @@ def main():
     if args.mask_dir:        
         mask = torch.load(args.mask_dir, map_location=args.device)
         pruning_model_custom(model, mask)
-        zero_rate = see_weight_rate(model)
-        print('model 0:',zero_rate)
+        # zero_rate = see_weight_rate(model)
+        # print('model 0:',zero_rate)
 
 
     if args.local_rank == 0:
@@ -844,40 +874,57 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
+        print("Before pruning and fine-tuning: ")
         evaluate(args, model, tokenizer)
-        pruning_model(model, 0.1)
+        model_dict = model.state_dict()
+        torch.save(model_dict, args.checkpoint_dir+ 'pruned_model0' +'.pth')
+
+        if not args.no_pruning and not args.skip_first_pruning:
+            pruning_model(args,model, 0.1)
+            # zero = see_weight_rate(model)
+            # print('zero rate', zero)
         pruning_steps = args.pruning_steps
         for p_step in range(pruning_steps):
-            global_step, tr_loss = train(args, train_dataset, model, tokenizer)
-            logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
-            keys_to_remove = []
-            keys_to_rename = []
-            model_dict = model.state_dict()
-            for key in model_dict.keys():
-                if 'mask' in key:
-                    # print("Mask: ", model_dict[key].shape)
-                    mask = model_dict[key]
-                    new_key = key.replace("_mask", "")
-                    orig_key = new_key + '_orig'
+            if args.save_prune_before_finetune:
+                print("After pruning step:", p_step)
+                evaluate(args, model, tokenizer)
+                torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(p_step+1) +'.pth')
+            if args.num_train_epochs > 0:
+                global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+                logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+            if not args.no_pruning and (not args.skip_first_pruning or p_step != 0):
+                keys_to_remove = []
+                keys_to_rename = []
+                model_dict = model.state_dict()
+                for key in model_dict.keys():
+                    if 'mask' in key:
+                        # print("Mask: ", model_dict[key].shape)
+                        mask = model_dict[key]
+                        new_key = key.replace("_mask", "")
+                        orig_key = new_key + '_orig'
+                
+                        # print("Weight: ",model_dict[key].shape)
+                        model_dict[orig_key] *= mask
+                        # print(model_dict[orig_key])
+                        keys_to_remove.append(key)
+                        keys_to_rename.append(orig_key)
             
-                    # print("Weight: ",model_dict[key].shape)
-                    model_dict[orig_key] *= mask
-                    # print(model_dict[orig_key])
-                    keys_to_remove.append(key)
-                    keys_to_rename.append(orig_key)
-            
-            for key in keys_to_remove:
-                del model_dict[key]
-            for key in keys_to_rename:
-                new_key = key.replace("_orig", "")
-                model_dict[new_key] = model_dict.pop(key)
-            
-            zero = see_weight_rate(model)
-            torch.save(model_dict, args.checkpoint_dir+ 'pruned_model' + str(zero) +'.pth')
+                for key in keys_to_remove:
+                    del model_dict[key]
+                for key in keys_to_rename:
+                    new_key = key.replace("_orig", "")
+                    model_dict[new_key] = model_dict.pop(key)
 
-            pruning_model(model, 0.1)
-            zero = see_weight_rate(model)
-            print('zero rate', zero)
+                print("After pruning and fine-tuning step:", p_step)
+                evaluate(args, model, tokenizer)
+
+                # zero = see_weight_rate(model)
+            torch.save(model_dict, args.checkpoint_dir+ 'pruned_finetuned_model' + str(p_step+1) +'.pth')
+
+            if not args.no_pruning:
+                pruning_model(args,model, 0.1)
+                # zero = see_weight_rate(model)
+                # print('zero rate', zero)
 
 
     # # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
