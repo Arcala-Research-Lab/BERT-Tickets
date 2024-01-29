@@ -842,7 +842,7 @@ def main():
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         model = AutoModelForSequenceClassification.from_pretrained("yoshitomo-matsubara/bert-base-uncased-mnli")
 
-    elif args.dir == 'pre_disitlbert':
+    elif args.dir == 'pre_distilbert':
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
         model = AutoModelForSequenceClassification.from_pretrained("vicl/distilbert-base-uncased-finetuned-mrpc")
     elif args.dir == 'rand':
