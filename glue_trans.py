@@ -865,6 +865,11 @@ def main():
     elif args.dir == 'pre_distilbert':
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
         model = AutoModelForSequenceClassification.from_pretrained("vicl/distilbert-base-uncased-finetuned-mrpc")
+
+    elif args.dir == 'pre_distilbert_textattack':
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        model = AutoModelForSequenceClassification.from_pretrained("textattack/distilbert-base-uncased-MRPC")
+
     elif args.dir == 'rand':
 
         model = model_class(config=config)
