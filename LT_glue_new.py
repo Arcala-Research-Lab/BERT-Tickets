@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Tenso
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
+import transformers_master as transformer
 from transformers import (
     WEIGHTS_NAME,
     AdamW,
@@ -65,6 +66,7 @@ from transformers import (
 )
 from transformers import glue_compute_metrics as compute_metrics
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
+# from transformers_master.src.transformers.data.processors.glue import glue_convert_examples_to_features as convert_examples_to_features
 from transformers import glue_output_modes as output_modes
 from transformers import glue_processors as processors
 
@@ -246,7 +248,9 @@ def train(args, train_dataset, model, tokenizer):
         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
 
+    # 1/28/24 - changing adam optimizer per warning
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
@@ -534,9 +538,10 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
             label_list=label_list,
             max_length=args.max_seq_length,
             output_mode=output_mode,
-            # pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
-            # pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            # pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
+            # 1/28/24 - commenting out to fix accuracy
+            pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
+            pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+            pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
         )
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s", cached_features_file)
