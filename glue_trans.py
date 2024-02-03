@@ -757,6 +757,8 @@ def main():
     parser.add_argument("--no_pruning", type=bool, default=False)
     parser.add_argument("--save_prune_before_finetune", type=bool, default=True)
     parser.add_argument("--skip_first_pruning", type=bool, default=False)
+    # parser.add_argument("--pruning_rate", type=float, default=0.1)
+    parser.add_argument("--oneshot", type=bool, default=False)
 
     args = parser.parse_args()
 
@@ -866,9 +868,9 @@ def main():
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
         model = AutoModelForSequenceClassification.from_pretrained("vicl/distilbert-base-uncased-finetuned-mrpc")
 
-    elif args.dir == 'pre_distilbert_textattack':
+    elif args.dir == 'pre_distilbert_new':
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        model = AutoModelForSequenceClassification.from_pretrained("textattack/distilbert-base-uncased-MRPC")
+        model = AutoModelForSequenceClassification.from_pretrained("abhinav-kumar-thakur/distilbert-base-uncased-finetuned-mrpc")
 
     elif args.dir == 'rand':
 
@@ -896,6 +898,7 @@ def main():
 
     logger.info("Training/evaluation parameters %s", args)
 
+    rate = 0.1
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
@@ -905,7 +908,7 @@ def main():
         torch.save(model_dict, args.checkpoint_dir+ 'pruned_model0' +'.pth')
 
         if not args.no_pruning and not args.skip_first_pruning:
-            pruning_model(args,model, 0.1)
+            pruning_model(args,model, rate)
             zero = see_weight_rate(args,model)
             print('zero rate', zero)
         pruning_steps = args.pruning_steps
@@ -947,7 +950,9 @@ def main():
             torch.save(model_dict, args.checkpoint_dir+ 'pruned_finetuned_model' + str(p_step+1) +'.pth')
 
             if not args.no_pruning:
-                pruning_model(args,model, 0.1)
+                if args.oneshot:
+                    rate += 0.1
+                pruning_model(args,model, rate)
                 zero = see_weight_rate(args,model)
                 print('zero rate', zero)
 
